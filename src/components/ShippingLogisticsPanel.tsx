@@ -82,7 +82,7 @@ export const ShippingLogisticsPanel: React.FC<ShippingLogisticsPanelProps> = ({
   const [accountInfo, setAccountInfo] = useState<any>({
     name: settings.melhorEnvioAccountName || 'Jose ulisses',
     email: settings.melhorEnvioAccountEmail || 'jose.ulisses385@gmail.com',
-    phone: settings.melhorEnvioAccountPhone || '11975208196',
+    phone: settings.melhorEnvioAccountPhone || '11989055683',
     address: settings.melhorEnvioOriginAddress || 'Rua Manoel Amaral, 107 apt 101 - Centro, Diadema - SP',
     postalCode: '09910000',
     status: 'Allowed',

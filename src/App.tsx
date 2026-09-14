@@ -568,6 +568,7 @@ export default function App() {
           name: newOrder.customerName,
           phone: newOrder.customerPhone,
           email: newOrder.customerEmail,
+          password: newOrder.customerPassword,
           address: newOrder.deliveryAddress,
           cep: newOrder.cep,
           neighborhood: newOrder.neighborhood,

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Users,
+  Users, Plus,
   ShieldCheck,
   Search,
   Download,
@@ -30,7 +30,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { Customer, Order, Product, StoreSettings } from '../types';
-import { syncCustomersFromOrdersOnServer } from '../services/storeApi';
+import { syncCustomersFromOrdersOnServer, saveCustomerToServer } from '../services/storeApi';
 import { CustomersMarketingBroadcast } from './CustomersMarketingBroadcast';
 
 interface CustomersManagerTabProps {
@@ -63,6 +63,35 @@ export const CustomersManagerTab: React.FC<CustomersManagerTabProps> = ({
   const [copiedEmails, setCopiedEmails] = useState(false);
 
   // Sincronizar todos os pedidos com o banco de clientes para garantir 100% de persistência
+
+  const handleQuickAddCustomer = async () => {
+    if (!newCustName.trim() || !newCustPhone.trim()) {
+      alert('Por favor, preencha nome e WhatsApp.');
+      return;
+    }
+    
+    // Add a basic manual customer
+    const res = await saveCustomerToServer({
+      name: newCustName.trim(),
+      phone: newCustPhone.trim(),
+      lgpdConsent: true,
+      lgpdConsentDate: new Date().toISOString(),
+      emailMarketingConsent: true,
+      emailMarketingConsentDate: new Date().toISOString()
+    });
+    
+    if (res.success) {
+      setNewCustName('');
+      setNewCustPhone('');
+      setIsAddingCustomer(false);
+      await triggerRefresh();
+      setActionFeedback('Cliente adicionado com sucesso!');
+      setTimeout(() => setActionFeedback(null), 4000);
+    } else {
+      alert('Erro ao adicionar cliente: ' + (res.message || 'Erro desconhecido.'));
+    }
+  };
+
   const handleSyncOrders = async () => {
     setIsSyncing(true);
     try {
@@ -659,18 +688,29 @@ export const CustomersManagerTab: React.FC<CustomersManagerTabProps> = ({
         </div>
       </div>
 
+      
       {/* Filters & Search bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#1d0224] p-3.5 rounded-2xl border border-purple-900/60">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Pesquisar por nome, WhatsApp, e-mail ou cidade..."
-            className="w-full pl-9 pr-4 py-2 rounded-xl bg-[#14011a] border border-purple-800/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="w-4 h-4 text-purple-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Pesquisar..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-[#14011a] border border-purple-800/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
+            />
+          </div>
+          <button
+            onClick={() => setIsAddingCustomer(true)}
+            className="px-3 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-md shrink-0 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Adicionar</span>
+          </button>
         </div>
+
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
           <button

@@ -21,7 +21,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { Customer, Order, StoreSettings } from '../types';
-import { recoverCustomerOnServer } from '../services/storeApi';
+import { recoverCustomerOnServer, loginCustomerOnServer } from '../services/storeApi';
 
 interface CustomerAuthModalProps {
   isOpen: boolean;
@@ -59,6 +59,10 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCepSearching, setIsCepSearching] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Recovery state
   const [recoverIdentifier, setRecoverIdentifier] = useState('');
@@ -94,8 +98,20 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
     e.preventDefault();
     setRegisterError(null);
     
-    if (!name.trim() || !phone.trim()) {
+if (!name.trim() || !phone.trim()) {
       setRegisterError('Por favor, informe seu nome e telefone (WhatsApp).');
+      return;
+    }
+    if (!email.trim() || !email.includes('@')) {
+      setRegisterError('Por favor, informe um endereço de e-mail válido para cadastro seguro.');
+      return;
+    }
+    if (!registerPassword) {
+      setRegisterError('Por favor, crie uma senha para sua conta.');
+      return;
+    }
+    if (registerPassword !== confirmPassword) {
+      setRegisterError('As senhas digitadas não coincidem.');
       return;
     }
     if (!email.trim() || !email.includes('@')) {
@@ -115,6 +131,7 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
         name: name.trim(),
         phone: phone.trim(),
         email: email.trim().toLowerCase(),
+        password: registerPassword,
         cpf: cpf.trim(),
         address: address.trim(),
         addressNumber: addressNumber.trim(),
@@ -546,87 +563,49 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
 
           {/* Not logged in: Login Form */}
           {!currentUser && tab === 'login' && (
-            <form onSubmit={handleQuickLogin} className="space-y-3">
+            <form onSubmit={handleQuickLogin} className="space-y-4">
               <p className="text-xs text-purple-200/80">
                 Acesse seus pedidos e suas informações salvas de forma segura no banco de dados da loja:
               </p>
               <div>
                 <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                  Seu Nome
+                  E-mail ou WhatsApp
                 </label>
                 <input
                   type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Como devemos te chamar?"
+                  required
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  placeholder="(11) 99999-9999 ou email@exemplo.com"
                   className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                  WhatsApp com DDD *
+                  Senha *
                 </label>
                 <input
-                  type="tel"
+                  type="password"
                   required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="(11) 99999-9999"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Sua senha secreta"
                   className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
                 />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-purple-200 mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Mail className="w-3.5 h-3.5 text-pink-400" />
-                    Seu E-mail *
-                  </span>
-                  <span className="text-[10px] text-pink-400 font-normal">Para cupons e rastreio</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="seu.email@exemplo.com"
-                  className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-                />
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-[13px] shadow-md transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Acessando...' : 'Entrar na Minha Conta'}
+                </button>
               </div>
 
-              {/* Marketing consent check */}
-              <div className="p-3 rounded-xl bg-pink-950/30 border border-pink-800/40">
-                <label className="flex items-start gap-2.5 cursor-pointer text-[11px] text-purple-200 leading-tight">
-                  <input
-                    type="checkbox"
-                    checked={emailMarketingConsent}
-                    onChange={(e) => setEmailMarketingConsent(e.target.checked)}
-                    className="mt-0.5 accent-pink-500 rounded"
-                  />
-                  <span>
-                    🎁 <strong>Autorizo receber e-mails</strong> com cupom de 10% de desconto (em pedidos a partir de R$ 150) e promoções exclusivas (posso descadastrar a qualquer momento).
-                  </span>
-                </label>
-              </div>
-
-              {/* LGPD notice */}
-              <div className="p-3 rounded-xl bg-[#190222] border border-purple-800/60 text-[11px] text-purple-300/80 flex items-start gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>
-                  Banco de dados seguro com criptografia SSL. Seus dados são salvos em estrito cumprimento da <strong>LGPD (Lei nº 13.709/2018)</strong> e nunca compartilhados com terceiros.
-                </span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:opacity-95 text-white text-xs font-black shadow-md cursor-pointer transition-all disabled:opacity-50"
-              >
-                {isSubmitting ? 'Salvando no banco de dados...' : 'Entrar / Salvar Conta com Segurança'}
-              </button>
-
-              <div className="flex flex-col gap-1.5 text-center pt-2">
+              <div className="flex flex-col gap-2 pt-2 text-center border-t border-purple-800/40 mt-4 pt-4">
                 <button
                   type="button"
                   onClick={() => setTab('recover')}
@@ -640,7 +619,7 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                   onClick={() => setTab('register')}
                   className="text-xs text-pink-400 hover:text-pink-300 font-bold underline cursor-pointer"
                 >
-                  Novo cliente? Cadastrar endereço completo e ganhar cupom de 10% (acima de R$ 150)
+                  Novo cliente? Criar conta rápida
                 </button>
               </div>
             </form>
@@ -695,175 +674,64 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-bold text-purple-200 mb-1 flex items-center justify-between">
-                    <span>CEP (Frete Rápido)</span>
-                    {isCepSearching && <span className="text-[10px] text-pink-400 animate-pulse">Buscando...</span>}
+                  <label className="block text-[11px] font-bold text-purple-200 mb-1">
+                    Criar Senha *
                   </label>
                   <input
-                    type="text"
-                    maxLength={9}
-                    value={cep}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCep(val);
-                      if (val.replace(/\D/g, '').length === 8) {
-                        handleLookupCepInRegister(val);
-                      }
-                    }}
-                    placeholder="00000-000"
-                    className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500 font-mono"
+                    type="password"
+                    required
+                    value={registerPassword}
+                    onChange={(e) => setRegisterPassword(e.target.value)}
+                    placeholder="Sua senha secreta"
+                    className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white focus:outline-none focus:border-pink-500"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                    Cidade / UF
+                    Confirmar Senha *
                   </label>
                   <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Ex: Diadema - SP"
-                    className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repita a senha"
+                    className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white focus:outline-none focus:border-pink-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                    Bairro
-                  </label>
-                  <input
-                    type="text"
-                    value={neighborhood}
-                    onChange={(e) => setNeighborhood(e.target.value)}
-                    placeholder="Seu bairro"
-                    className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-                  />
-                </div>
-                <div className="col-span-1 sm:col-span-2 grid grid-cols-6 gap-2">
-                  <div className="col-span-4">
-                    <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                      Endereço / Rua
-                    </label>
-                    <input
-                      type="text"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="Sua rua"
-                      className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                      Número
-                    </label>
-                    <input
-                      type="text"
-                      value={addressNumber}
-                      onChange={(e) => setAddressNumber(e.target.value)}
-                      placeholder="123"
-                      className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-                    />
-                  </div>
-                  <div className="col-span-6">
-                    <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                      Complemento
-                    </label>
-                    <input
-                      type="text"
-                      value={complement}
-                      onChange={(e) => setComplement(e.target.value)}
-                      placeholder="Ex: Apto 402, Bloco B"
-                      className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Marketing & Coupon Consent Box */}
-              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-pink-950/40 to-purple-950/40 border border-pink-700/50 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-pink-300">
-                    <Gift className="w-4 h-4 text-pink-400" />
-                    <span>Clube de Ofertas & Cupons</span>
-                  </div>
-                  <span className="text-[10px] bg-pink-500/25 text-pink-300 px-2 py-0.5 rounded-full font-bold border border-pink-500/30 flex items-center gap-1">
-                    <Tag className="w-3 h-3 text-pink-400" />
-                    BEMVINDA10 (10% OFF acima de R$ 150)
-                  </span>
-                </div>
-                <label className="flex items-start gap-2.5 cursor-pointer text-[11px] text-purple-100 leading-tight">
+              {/* Marketing consent check */}
+              <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-pink-950/40 to-purple-950/40 border border-pink-700/40 space-y-1">
+                <label className="flex items-start gap-2.5 cursor-pointer text-[11px] text-purple-200 leading-tight">
                   <input
                     type="checkbox"
                     checked={emailMarketingConsent}
                     onChange={(e) => setEmailMarketingConsent(e.target.checked)}
-                    className="mt-0.5 accent-pink-500 rounded"
+                    className="mt-0.5 rounded border-purple-600 bg-[#1b0222] text-pink-500 focus:ring-pink-500 focus:ring-offset-[#1b0222]"
                   />
                   <span>
-                    <strong>Sim, autorizo!</strong> Desejo receber por e-mail o cupom <strong>BEMVINDA10</strong> (10% de desconto em compras a partir de R$ 150,00), ofertas exclusivas e reposições (posso cancelar quando quiser).
+                    <strong className="text-pink-300">🎁 Autorizo receber e-mails</strong> com cupom de 10% de desconto e promoções (posso cancelar depois).
                   </span>
                 </label>
-                <p className="text-[10px] text-pink-300/80 pl-6 flex items-center gap-1">
-                  <span>✨</span>
-                  <span>Regra: 10% de desconto válido para compras com subtotal a partir de R$ 150,00.</span>
-                </p>
-                <p className="text-[10px] text-purple-300/70 pl-6">
-                  🔒 Garantia anti-spam. Seus dados ficam protegidos no banco de dados com autorização registrada.
-                </p>
               </div>
 
-              {/* LGPD Consent Checkbox */}
-              <div className="p-3.5 rounded-2xl bg-[#170220] border border-emerald-900/60 space-y-2">
-                <label className="flex items-start gap-2.5 cursor-pointer text-[11px] text-purple-200 leading-tight">
-                  <input
-                    type="checkbox"
-                    checked={lgpdConsent}
-                    onChange={(e) => setLgpdConsent(e.target.checked)}
-                    className="mt-0.5 accent-pink-500 rounded"
-                    required
-                  />
-                  <span>
-                    Concordo com o tratamento dos meus dados pessoais (nome, e-mail, telefone, endereço) exclusivamente para compras e atendimento, em conformidade com a <strong>LGPD (Lei nº 13.709/2018)</strong>.
-                  </span>
-                </label>
-                <div className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-semibold pl-6">
-                  <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
-                  <span>Banco de dados seguro com SSL 256-bit • Seus dados nunca serão compartilhados.</span>
-                </div>
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTab('login')}
+                  className="flex-1 py-2.5 rounded-xl border border-purple-700 hover:bg-white/5 text-purple-200 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs shadow-md transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? 'Salvando...' : 'Criar Minha Conta'}
+                </button>
               </div>
-
-              {registerError && (
-                <div className="p-3 bg-red-950/50 border border-red-500/50 rounded-xl text-xs text-red-200 text-center font-bold">
-                  {registerError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-2.5 px-4 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-xs font-black shadow-md cursor-pointer transition-all disabled:opacity-50"
-              >
-                {isSubmitting
-                  ? 'Gravando no servidor...'
-                  : currentUser
-                  ? 'Salvar Alterações no Banco de Dados'
-                  : 'Concluir Cadastro Seguro no Banco de Dados'}
-              </button>
-
-              {currentUser && (
-                <div className="pt-2 border-t border-purple-900/40 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={handleExportMyData}
-                    className="text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-bold cursor-pointer"
-                    title="Baixar cópia de todos os dados registrados sobre você (Portabilidade de Dados - Art. 18 da LGPD)"
-                  >
-                    <Download className="w-3.5 h-3.5 text-pink-400" />
-                    <span>Baixar Meus Dados (Portabilidade LGPD)</span>
-                  </button>
-                </div>
-              )}
             </form>
           )}
 

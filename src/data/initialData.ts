@@ -81,8 +81,8 @@ export const INITIAL_SHIPPING_METHODS: ShippingMethodOption[] = [
 export const INITIAL_SETTINGS: StoreSettings = {
   storeName: "Doidas e Meias",
   tagline: "As meias mais doidinhas do Brasil!",
-  whatsappNumber: "5511975208196",
-  whatsappDisplay: "(11) 97520-8196",
+  whatsappNumber: "5511989055683",
+  whatsappDisplay: "(11) 98905-5683",
   tiktokShopUrl: "https://www.tiktok.com/@doidas.e.meias?_r=1&_t=ZS-99VBixDavcj",
   tiktokUsername: "@doidas.e.meias",
   instagramUrl: "https://www.instagram.com/doidasemeias/",
@@ -94,7 +94,7 @@ export const INITIAL_SETTINGS: StoreSettings = {
   adminPin: "649309",
   
   // Configurações de Pagamento e Contas
-  pixKey: "5511975208196",
+  pixKey: "5511989055683",
   pixKeyType: "telefone",
   pixBeneficiary: "Doidas e Meias Confecções e Comércio",
   pixBank: "Mercado Pago / Nubank",

@@ -56,6 +56,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPassword, setCustomerPassword] = useState('');
   const [emailMarketingConsent, setEmailMarketingConsent] = useState(true);
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [addressNumber, setAddressNumber] = useState('');
@@ -78,6 +79,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [selectedMethodId, setSelectedMethodId] = useState<string>('correios_mini');
   const [isCepLoading, setIsCepLoading] = useState(false);
   const [isLiveShippingLoading, setIsLiveShippingLoading] = useState(false);
+
+  const [mpPaymentLink, setMpPaymentLink] = useState<string | null>(null);
+  const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
+
   const [liveMelhorEnvioQuotes, setLiveMelhorEnvioQuotes] = useState<ShippingMethodOption[]>([]);
   const [cepSuccessMsg, setCepSuccessMsg] = useState<string | null>(null);
   const [cepErrorMsg, setCepErrorMsg] = useState<string | null>(null);
@@ -347,14 +352,20 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setTimeout(() => setCopiedPix(false), 2000);
   };
 
-  const handleFinishOrder = (e: React.FormEvent) => {
+  const handleFinishOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName || !customerPhone || !deliveryAddress || !addressNumber || !neighborhood || !city || !cep) {
-      alert('Por favor, preencha todos os campos obrigatórios de entrega (Nome, WhatsApp, CEP, Endereço, Número, Bairro, Cidade).');
+      alert('Por favor, preencha todos os campos obrigatórios de entrega.');
       return;
     }
+    
+    if (!currentUser && !customerPassword) {
+      alert('Crie uma senha segura para rastrear seu pedido depois.');
+      return;
+    }
+
     if (!customerEmail || !customerEmail.includes('@')) {
-      alert('Por favor, informe seu e-mail para envio do comprovante, código de rastreio e cupons.');
+      alert('Por favor, informe seu e-mail para envio do comprovante.');
       return;
     }
 
@@ -367,6 +378,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       customerName,
       customerPhone,
       customerEmail: customerEmail.trim().toLowerCase(),
+      customerPassword: customerPassword,
       emailMarketingConsent,
       emailMarketingConsentDate: emailMarketingConsent ? new Date().toISOString() : undefined,
       deliveryAddress: `${deliveryAddress}, ${addressNumber}${complement ? ` - ${complement}` : ''}, ${neighborhood} - ${city} (CEP: ${cep})`,
@@ -396,6 +408,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setCompletedOrder(newOrder);
     setView('success');
     onClearCart();
+
+    if (paymentMethod === 'cartao' || paymentMethod === 'boleto') {
+      setIsGeneratingPayment(true);
+      try {
+        const res = await fetch('/api/payment/mercadopago/create-preference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: newOrder.orderNumber,
+            items: newOrder.items,
+            payer: {
+              name: newOrder.customerName,
+              email: newOrder.customerEmail,
+              phone: newOrder.customerPhone,
+              address: { street: deliveryAddress, number: addressNumber, cep }
+            },
+            deliveryFee: newOrder.deliveryFee
+          })
+        });
+        const data = await res.json();
+        if (data.success && data.initPoint) {
+          setMpPaymentLink(data.initPoint);
+        } else {
+          console.warn('MP Error:', data.error);
+          setMpPaymentLink(settings.cardGatewayUrl || null);
+        }
+      } catch (err) {
+        console.error('Error generating MP link', err);
+        setMpPaymentLink(settings.cardGatewayUrl || null);
+      } finally {
+        setIsGeneratingPayment(false);
+      }
+    }
   };
 
   const formatWhatsAppOrderText = (order: Order) => {
@@ -933,6 +978,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
                   </div>
 
+                  {!currentUser && (
+                    <div className="pt-2">
+                      <label className="block text-[11px] font-bold text-purple-200 mb-1 flex items-center justify-between">
+                        <span>Crie uma Senha para acompanhar o pedido</span>
+                        <span className="text-pink-400">Obrigatório</span>
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        value={customerPassword}
+                        onChange={(e) => setCustomerPassword(e.target.value)}
+                        placeholder="Crie sua senha secreta"
+                        className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-pink-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.15)]"
+                      />
+                    </div>
+                  )}
+
                   {/* Checkbox de autorização para cupons e ofertas */}
                   <div className="p-3 rounded-2xl bg-gradient-to-r from-pink-950/40 to-purple-950/40 border border-pink-700/40 space-y-1">
                     <label className="flex items-start gap-2.5 cursor-pointer text-[11px] text-purple-200 leading-tight">
@@ -984,18 +1046,33 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       />
                     </div>
 
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-purple-200 mb-1">
-                        Rua e Número *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
-                        placeholder="Rua das Flores, 123"
-                        className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-                      />
+                    <div className="col-span-2 grid grid-cols-[2fr_1fr] gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-purple-200 mb-1">
+                          Endereço / Rua *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={deliveryAddress}
+                          onChange={(e) => setDeliveryAddress(e.target.value)}
+                          placeholder="Ex: Rua das Flores"
+                          className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-purple-200 mb-1">
+                          Número *
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={addressNumber}
+                          onChange={(e) => setAddressNumber(e.target.value)}
+                          placeholder="Ex: 123"
+                          className="w-full px-3 py-2 rounded-xl bg-[#1b0222] border border-purple-700/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1359,19 +1436,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </div>
                       <p className="text-[11px] text-purple-200">
                         {settings.cardInstallmentsInfo || 'Pague em até 3x sem juros ou 12x com taxas da operadora.'}
-                      </p>
-                      {settings.cardGatewayUrl && (
-                        <a
-                          href={settings.cardGatewayUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px]"
-                        >
-                          <span>Abrir Link de Pagamento</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
+                      </p>                    </div>
                   )}
 
                   <div>
@@ -1499,19 +1564,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 )}
                 
                 {/* INSTRUCOES DE PAGAMENTO NO SUCESSO */}
-                {(completedOrder.paymentMethod === 'cartao' || completedOrder.paymentMethod === 'boleto') && settings.cardGatewayUrl && (
+                {(completedOrder.paymentMethod === 'cartao' || completedOrder.paymentMethod === 'boleto') && (
                   <div className="mt-3 p-3 bg-cyan-950/40 border border-cyan-500/50 rounded-xl text-center space-y-2">
                     <p className="text-[11px] text-cyan-200 font-semibold">
-                      Para concluir o seu pedido, realize o pagamento via Mercado Pago através do link abaixo:
+                      Para concluir o seu pedido com o valor exato (R$ {completedOrder.total.toFixed(2).replace('.', ',')}), realize o pagamento via Mercado Pago através do link abaixo:
                     </p>
-                    <a
-                      href={settings.cardGatewayUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px] shadow-lg shadow-cyan-900/30 transition-all hover:scale-105"
-                    >
-                      <span>💳 Pagar via Mercado Pago</span>
-                    </a>
+                    {isGeneratingPayment ? (
+                      <div className="py-2 text-cyan-400 text-xs font-bold animate-pulse">Gerando link de pagamento com o valor exato...</div>
+                    ) : mpPaymentLink ? (
+                      <a
+                        href={mpPaymentLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[11px] shadow-lg shadow-cyan-900/30 transition-all hover:scale-105"
+                      >
+                        <span>💳 Pagar R$ {completedOrder.total.toFixed(2).replace('.', ',')} no Mercado Pago</span>
+                      </a>
+                    ) : (
+                      <p className="text-rose-400 text-xs">Erro ao gerar link. O lojista precisa configurar o Token do Mercado Pago.</p>
+                    )}
                   </div>
                 )}
                 {completedOrder.paymentMethod === 'pix' && (

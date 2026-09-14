@@ -1096,9 +1096,7 @@ const DEFAULT_MELHOR_ENVIO_TOKEN =
 function getEffectiveMelhorEnvioToken(): string {
   const current = readStore();
   return (
-    process.env.MELHOR_ENVIO_TOKEN ||
-    current?.settings?.melhorEnvioToken ||
-    DEFAULT_MELHOR_ENVIO_TOKEN
+    (process.env.MELHOR_ENVIO_TOKEN || current?.settings?.melhorEnvioToken || DEFAULT_MELHOR_ENVIO_TOKEN)?.trim()
   );
 }
 

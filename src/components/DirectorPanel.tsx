@@ -841,7 +841,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
                       onChange={(e) =>
                         setLocalSettings({ ...localSettings, pixKey: e.target.value })
                       }
-                      placeholder="Ex: 5511975208196 ou contato@doidasemeias.com.br"
+                      placeholder="Ex: 5511989055683 ou contato@doidasemeias.com.br"
                       className="w-full px-3 py-2 rounded-xl bg-[#1c0226] border border-purple-700 text-amber-300 font-mono text-xs font-bold"
                     />
                   </div>
@@ -1327,7 +1327,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
                       onChange={(e) =>
                         setLocalSettings({ ...localSettings, whatsappNumber: e.target.value })
                       }
-                      placeholder="Ex: 5511975208196"
+                      placeholder="Ex: 5511989055683"
                       className="w-full px-3 py-2 rounded-xl bg-[#1c0226] border border-emerald-500 text-white font-mono font-bold"
                     />
                     <p className="text-[10px] text-purple-300/60 mt-1">

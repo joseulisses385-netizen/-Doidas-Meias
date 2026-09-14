@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Send,
   Sparkles,
@@ -6,7 +6,7 @@ import {
   ShoppingBag,
   Truck,
   Copy,
-  Check,
+  Check, X,
   Download,
   ExternalLink,
   MessageSquare,
@@ -20,7 +20,7 @@ import {
   Share2,
 } from 'lucide-react';
 import { Customer, Order, Product, StoreSettings } from '../types';
-import { syncCustomersFromOrdersOnServer } from '../services/storeApi';
+import { syncCustomersFromOrdersOnServer, saveCustomerToServer } from '../services/storeApi';
 
 interface CustomersMarketingBroadcastProps {
   customers: Customer[];
@@ -52,8 +52,13 @@ export const CustomersMarketingBroadcast: React.FC<CustomersMarketingBroadcastPr
   const [customMessage, setCustomMessage] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAddingCustomer, setIsAddingCustomer] = useState(false);
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [sentCustomerIds, setSentCustomerIds] = useState<Set<string>>(new Set());
+  const [sequentialQueue, setSequentialQueue] = useState<Customer[]>([]);
+  const [isSequentialRunning, setIsSequentialRunning] = useState(false);
 
   // Available coupons from settings or standard
   const availableCoupons = useMemo(() => {
@@ -181,6 +186,34 @@ export const CustomersMarketingBroadcast: React.FC<CustomersMarketingBroadcastPr
   };
 
   // Sync orders with customer database
+
+  const handleQuickAddCustomer = async () => {
+    if (!newCustName.trim() || !newCustPhone.trim()) {
+      alert('Por favor, preencha nome e WhatsApp.');
+      return;
+    }
+    
+    onFeedback('Adicionando cliente...');
+    const res = await saveCustomerToServer({
+      name: newCustName.trim(),
+      phone: newCustPhone.trim(),
+      lgpdConsent: true,
+      lgpdConsentDate: new Date().toISOString(),
+      emailMarketingConsent: true,
+      emailMarketingConsentDate: new Date().toISOString()
+    });
+    
+    if (res.success) {
+      setNewCustName('');
+      setNewCustPhone('');
+      setIsAddingCustomer(false);
+      onRefreshCustomers();
+      onFeedback('Cliente adicionado com sucesso!');
+    } else {
+      alert('Erro: ' + (res.message || 'Desconhecido'));
+    }
+  };
+
   const handleSyncOrders = async () => {
     setIsSyncing(true);
     try {
@@ -324,19 +357,71 @@ export const CustomersMarketingBroadcast: React.FC<CustomersMarketingBroadcastPr
     onFeedback('✓ Planilha de leads para E-mail Marketing baixada com sucesso!');
   };
 
-  const handleSendSingleWhatsApp = (cust: Customer) => {
+  
+  // Sequential Sending Logic
+  useEffect(() => {
+    if (!isSequentialRunning || sequentialQueue.length === 0) return;
+
+    const handleFocus = () => {
+      // Small delay to ensure the window focus isn't jarring
+      setTimeout(() => {
+        if (sequentialQueue.length > 0) {
+          const nextCust = sequentialQueue[0];
+          setSequentialQueue(prev => prev.slice(1));
+          handleSendSingleWhatsApp(nextCust, true); // true = from sequential
+        } else {
+          setIsSequentialRunning(false);
+          alert('Disparo Sequencial Finalizado!');
+        }
+      }, 1000);
+    };
+
+    window.addEventListener('focus', handleFocus, { once: true });
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isSequentialRunning, sequentialQueue]);
+
+  const handleStartSequential = () => {
+    // Filter audience that has phone and wasn't sent yet
+    const pending = searchFilteredAudience.filter(c => {
+      const clean = (c.phone || '').replace(/\D/g, '');
+      return clean.length >= 8 && !sentCustomerIds.has(c.id);
+    });
+
+    if (pending.length === 0) {
+      alert('Todos os clientes desta lista já receberam a mensagem ou não possuem telefone válido.');
+      return;
+    }
+
+    if (confirm(`Iniciar disparo sequencial para ${pending.length} clientes? \n\nO WhatsApp Web será aberto. Envie a mensagem, FECHE a aba do WhatsApp e a próxima abrirá automaticamente.`)) {
+      setIsSequentialRunning(true);
+      // Trigger the first one manually
+      const first = pending[0];
+      setSequentialQueue(pending.slice(1));
+      handleSendSingleWhatsApp(first, true);
+    }
+  };
+
+  const handleStopSequential = () => {
+    setIsSequentialRunning(false);
+    setSequentialQueue([]);
+  };
+
+  const handleSendSingleWhatsApp = (cust: Customer, isSequential = false) => {
     const clean = (cust.phone || '').replace(/\D/g, '');
     if (!clean) {
-      alert(`O cliente ${cust.name} não possui telefone cadastrado.`);
+      if (!isSequential) alert(`O cliente ${cust.name} não possui telefone cadastrado.`);
       return;
     }
     const phone55 = clean.startsWith('55') ? clean : `55${clean}`;
     const text = generateMessageText(cust.name, cust.welcomeCoupon || selectedCouponCode);
     const url = `https://wa.me/${phone55}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
-
     setSentCustomerIds((prev) => new Set(prev).add(cust.id));
   };
+
 
   const toggleProductSelection = (id: string) => {
     setSelectedProductIds((prev) =>
@@ -741,6 +826,7 @@ export const CustomersMarketingBroadcast: React.FC<CustomersMarketingBroadcastPr
 
           {/* Disparo Direto 1-a-1 via WhatsApp */}
           <div className="p-5 rounded-3xl bg-[#1d0224] border border-purple-800/60 shadow-xl space-y-3 flex flex-col max-h-[480px]">
+
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-xs font-black uppercase text-pink-400 tracking-wider">
@@ -754,18 +840,83 @@ export const CustomersMarketingBroadcast: React.FC<CustomersMarketingBroadcastPr
                 {sentCustomerIds.size} enviados
               </span>
             </div>
-
-            {/* Search inside audience */}
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar cliente na lista..."
-                className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[#14011a] border border-purple-800/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
-              />
+            
+            {/* Sequential Actions */}
+            <div className="flex items-center gap-2">
+              {!isSequentialRunning ? (
+                <button
+                  onClick={handleStartSequential}
+                  className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center gap-2"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Iniciar Disparo Sequencial
+                </button>
+              ) : (
+                <button
+                  onClick={handleStopSequential}
+                  className="flex-1 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center gap-2 animate-pulse"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Parar Disparo (Restam {sequentialQueue.length})
+                </button>
+              )}
             </div>
+
+
+            
+            {/* Search inside audience */}
+            <div className="flex gap-2 relative">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar na lista..."
+                  className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[#14011a] border border-purple-800/60 text-xs text-white placeholder-purple-400/50 focus:outline-none focus:border-pink-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddingCustomer(true)}
+                className="px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-colors"
+                title="Adicionar Cliente Manualmente"
+              >
+                + Adicionar
+              </button>
+            </div>
+            
+            {isAddingCustomer && (
+              <div className="p-3 rounded-xl bg-pink-950/30 border border-pink-500/50 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] font-bold text-pink-300">Novo Cliente</span>
+                  <button onClick={() => setIsAddingCustomer(false)} className="text-purple-400 hover:text-white"><X className="w-3.5 h-3.5" /></button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newCustName}
+                    onChange={(e) => setNewCustName(e.target.value)}
+                    placeholder="Nome"
+                    className="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-[#14011a] border border-purple-800/60 text-xs text-white focus:outline-none focus:border-pink-500"
+                  />
+                  <input
+                    type="text"
+                    value={newCustPhone}
+                    onChange={(e) => setNewCustPhone(e.target.value)}
+                    placeholder="WhatsApp"
+                    className="flex-1 min-w-0 px-2 py-1.5 rounded-lg bg-[#14011a] border border-purple-800/60 text-xs text-white focus:outline-none focus:border-pink-500"
+                  />
+                </div>
+                <button
+                  onClick={handleQuickAddCustomer}
+                  className="w-full py-1.5 rounded-lg bg-pink-600 hover:bg-pink-500 text-white font-bold text-[11px]"
+                >
+                  Salvar
+                </button>
+              </div>
+            )}
+
 
             {/* Customers list for 1-on-1 click */}
             <div className="divide-y divide-purple-900/40 overflow-y-auto flex-1 pr-1">

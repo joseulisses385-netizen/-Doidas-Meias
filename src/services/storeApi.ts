@@ -113,6 +113,20 @@ export async function syncCustomersToServer(customers: Customer[]): Promise<bool
   return syncCollection('customers', customers);
 }
 
+
+export async function loginCustomerOnServer(identifier: string, passwordHash: string) {
+  const customers = await fetchCustomersFromServer();
+  const found = customers.find(c => 
+    (c.email === identifier || c.phone === identifier || c.name === identifier) &&
+    c.password === passwordHash
+  );
+  if (found) {
+    if (found.status === 'anonimizado') return { success: false, message: 'Conta desativada/anonimizada.' };
+    return { success: true, customer: found };
+  }
+  return { success: false, message: 'Credenciais inválidas.' };
+}
+
 export async function fetchCustomersFromServer(): Promise<Customer[]> {
   return fetchCollection<Customer>('customers');
 }
